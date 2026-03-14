@@ -98,5 +98,5 @@ graph TD
 ---
 
 ## 👤 Author
-**[Bhumika Deshmukh]**
+**Bhumika Deshmukh**
 
