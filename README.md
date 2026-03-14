@@ -98,6 +98,5 @@ graph TD
 ---
 
 ## 👤 Author
-**[Your Name]**
-- LinkedIn: [Your Profile](https://linkedin.com/in/yourprofile)
-- Portfolio: [Your Website](https://yourportfolio.com)
+**[Bhumika Deshmukh]**
+
