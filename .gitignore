@@ -1,0 +1,29 @@
+# Common
+node_modules/
+dist/
+build/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+.gemini/
+
+# Client specific
+client/assign-me-now/node_modules/
+client/assign-me-now/dist/
+client/assign-me-now/.env
+
+# API specific
+taskflow-api/node_modules/
+taskflow-api/services/*/node_modules/
+taskflow-api/services/*/dist/
+taskflow-api/services/*/.env
+
+# Prisma
+taskflow-api/services/auth-service/prisma/dev.db
+taskflow-api/services/auth-service/prisma/dev.db-journal
