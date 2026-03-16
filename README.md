@@ -44,7 +44,7 @@
 **Key Problems Solved:**
 - **Decoupled Scaling:** By utilizing a microservices architecture, individual components (like Notifications or Auth) can scale independently based on demand.
 - **Secure Sessions:** Implementation of stateless JWT authentication combined with Redis-backed refresh token blacklisting ensures secure, instantly revocable user sessions.
-- **High-Performance Reads & Writes:** A polyglot persistence model handles relational integrity via PostgreSQL (Prisma) for users/projects, while leveraging MongoDB for flexible, high-throughput task and activity logging.
+- **High-Performance Reads & Writes:** A polyglot persistence model handles relational integrity via PostgreSQL (Prisma) for users, while leveraging MongoDB for flexible, high-throughput task and activity logging.
 - **Non-blocking Operations:** Asynchronous task processing using BullMQ (Redis-backed) prevents heavy operations (like notifications) from blocking core API responses.
 - **Real-Time Collaboration:** Socket.io guarantees users receive instant updates without polling, reducing server load and improving UX.
 
@@ -76,13 +76,12 @@ graph TB
 
     subgraph Microservices Layer
         AUTH_SVC["🔐 Auth Service"]
-        PROJ_SVC["📁 Project Service"]
         TASK_SVC["📋 Task Service"]
         NOTIF_SVC["🔔 Notification Service"]
     end
 
     subgraph Data & Queue Layer
-        PG[("🐘 PostgreSQL<br/>(Users, Projects)")]
+        PG[("🐘 PostgreSQL<br/>(Users)")]
         MONGO[("🍃 MongoDB<br/>(Tasks, Activity Logs)")]
         REDIS[("⚡ Redis<br/>(Cache, Token Blacklist, BullMQ)")]
     end
@@ -91,14 +90,10 @@ graph TB
     CLIENT <--> |WebSocket| NOTIF_SVC
 
     GATEWAY --> |/api/auth| AUTH_SVC
-    GATEWAY --> |/api/projects| PROJ_SVC
     GATEWAY --> |/api/tasks| TASK_SVC
 
     AUTH_SVC --> PG
     AUTH_SVC --> REDIS
-    
-    PROJ_SVC --> PG
-    PROJ_SVC --> REDIS
     
     TASK_SVC --> MONGO
     TASK_SVC --> PG
@@ -110,7 +105,6 @@ graph TB
     style CLIENT fill:#1a1a2e,stroke:#e94560,color:#fff
     style GATEWAY fill:#16213e,stroke:#0f3460,color:#fff
     style AUTH_SVC fill:#e94560,stroke:#fff,color:#fff
-    style PROJ_SVC fill:#e94560,stroke:#fff,color:#fff
     style TASK_SVC fill:#e94560,stroke:#fff,color:#fff
     style NOTIF_SVC fill:#e94560,stroke:#fff,color:#fff
     style PG fill:#336791,stroke:#fff,color:#fff
@@ -131,16 +125,7 @@ graph TB
   - `POST /api/auth/logout`
 - **Internal Logic:** Handles bcrypt password hashing. Generates short-lived Access Tokens and long-lived Refresh Tokens. Refresh tokens are tracked and revoked via Redis sets to securely handle session termination (logout) and prevent token replay.
 
-### 📁 2. Project Service
-**Responsibility:** Project lifecycle management, role definitions, and team member invitations.
-- **Main Endpoints:**
-  - `POST /api/projects`
-  - `GET /api/projects`
-  - `POST /api/projects/:id/invite`
-  - `DELETE /api/projects/:id`
-- **Internal Logic:** Ensures strict multi-tenant boundaries. A User can belong to multiple Projects with specific Roles. Uses PostgreSQL (through Prisma) for relational integrity. Validates cross-service project permissions before routing data.
-
-### 📋 3. Task Service
+### 📋 2. Task Service
 **Responsibility:** Task creation, board management, state transitions, and activity logging.
 - **Main Endpoints:**
   - `POST /api/tasks`
@@ -149,7 +134,7 @@ graph TB
   - `DELETE /api/tasks/:id`
 - **Internal Logic:** Creates task documents in MongoDB referencing PostgreSQL IDs. Implements caching around `GET` requests with a 60-second TTL to reduce DB hits. Upon task mutations (Create/Update), pushes a background job to the Redis/BullMQ queue.
 
-### 🔔 4. Notification Service
+### 🔔 3. Notification Service
 **Responsibility:** Asynchronous queue consumption and real-time client communication.
 - **Main Endpoints / Handlers:**
   - BullMQ Worker consuming `task-created` and `task-updated`
@@ -176,7 +161,7 @@ sequenceDiagram
     A-->>C: 200 OK + {accessToken, refreshToken}
 
     Note over C,P: Access Protected Route
-    C->>+API Route: GET /projects [Bearer: accessToken]
+    C->>+API Route: GET /tasks [Bearer: accessToken]
     API Route->>-C: 200 OK + Data
 
     Note over C,P: Token Refresh Flow
@@ -233,24 +218,6 @@ erDiagram
         string name
         datetime createdAt
     }
-    
-    PROJECT {
-        uuid id PK
-        string name
-        string description
-        uuid ownerId FK
-        datetime createdAt
-    }
-    
-    PROJECT_MEMBER {
-        uuid projectId FK
-        uuid userId FK
-        string role
-    }
-
-    USER ||--o{ PROJECT : "owns"
-    USER ||--o{ PROJECT_MEMBER : "belongs to"
-    PROJECT ||--o{ PROJECT_MEMBER : "has"
 
     %% MongoDB structure mapping conceptually
     TASK {
@@ -258,7 +225,6 @@ erDiagram
         string title
         string description
         string status
-        uuid projectId "Ref P_ID"
         uuid createdBy "Ref U_ID"
         uuid assignedTo "Ref U_ID"
     }
@@ -293,8 +259,6 @@ MERN Stack/
 │   │   ├── auth-service/             # Port 3001 | Auth, Users, Redis logic
 │   │   │   ├── prisma/               # PostgreSQL schema & migrations
 │   │   │   └── src/                  # Controllers, Middleware, Routes
-│   │   │
-│   │   ├── project-service/          # Port 3002 | Project Management (Planned/Implemented)
 │   │   │
 │   │   ├── task-service/             # Port 3003 | MongoDB mapping, Task Queue Publisher
 │   │   │
@@ -346,8 +310,8 @@ Create `.env` inside each target service directory:
 **`services/auth-service/.env`**
 ```env
 PORT=3001
-DATABASE_URL="postgresql://admin:password@localhost:5433/taskflow"
-JWT_SECRET=super_secret_jwt_key
+DATABASE_URL="postgresql://<USER>:<PASSWORD>@localhost:5433/taskflow"
+JWT_SECRET="<YOUR_JWT_SECRET>"
 ACCESS_TOKEN_EXPIRY=1h
 REFRESH_TOKEN_EXPIRY=7d
 REDIS_HOST=127.0.0.1
@@ -357,8 +321,8 @@ REDIS_PORT=6379
 **`services/task-service/.env`**
 ```env
 PORT=3003
-MONGO_URI=mongodb://localhost:27017/taskflow
-JWT_SECRET=super_secret_jwt_key
+MONGO_URI="mongodb://localhost:27017/taskflow"
+JWT_SECRET="<YOUR_JWT_SECRET>"
 REDIS_HOST=127.0.0.1
 REDIS_PORT=6379
 ```
@@ -391,12 +355,6 @@ npm run dev
 - `POST /api/auth/login` - Exchange credentials for Access/Refresh tokens.
 - `POST /api/auth/refresh` - Swap a valid refresh token for a new set.
 - `POST /api/auth/logout` - Revoke current refresh token in Redis.
-
-### Project Service (Port 3002)
-- `POST /api/projects` - Create a new project.
-- `GET /api/projects` - Get all projects for the authenticated user.
-- `POST /api/projects/:id/invite` - Add a user to a project role.
-- `DELETE /api/projects/:id` - Delete a project space.
 
 ### Task Service (Port 3003)
 - `POST /api/tasks` - Create a task in MongoDB and emit Bull Queue job.
