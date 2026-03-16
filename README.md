@@ -260,9 +260,9 @@ MERN Stack/
 │   │   │   ├── prisma/               # PostgreSQL schema & migrations
 │   │   │   └── src/                  # Controllers, Middleware, Routes
 │   │   │
-│   │   ├── task-service/             # Port 3003 | MongoDB mapping, Task Queue Publisher
+│   │   ├── task-service/             # Port 5000 | MongoDB mapping, Task Queue Publisher
 │   │   │
-│   │   └── notification-service/     # Port 3004 | BullMQ worker & WebSockets
+│   │   └── notification-service/     # Port 6000 | BullMQ worker & WebSockets
 │   │
 │   └── shared/                       # Common types, enum schemas
 ```
@@ -320,7 +320,7 @@ REDIS_PORT=6379
 
 **`services/task-service/.env`**
 ```env
-PORT=3003
+PORT=5000
 MONGO_URI="mongodb://localhost:27017/taskflow"
 JWT_SECRET="<YOUR_JWT_SECRET>"
 REDIS_HOST=127.0.0.1
@@ -392,10 +392,6 @@ As development continues, prioritizing the following components will harden the 
 ## 👤 Author
 
 **Bhumika Deshmukh**
-
-Built as a portfolio project demonstrating production-grade backend engineering with microservices architecture, distributed messaging, and real-time systems.
-
----
 
 <p align="center">
   <strong>⭐ If this project demonstrates solid backend engineering, consider giving it a star!</strong>
