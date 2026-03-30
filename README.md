@@ -119,19 +119,19 @@ graph TB
 ### 🔐 1. Auth Service
 **Responsibility:** Identity management, authentication, and session control.
 - **Main Endpoints:**
-  - `POST /api/auth/register`
-  - `POST /api/auth/login`
-  - `POST /api/auth/refresh`
-  - `POST /api/auth/logout`
+  - `POST /auth/register`
+  - `POST /auth/login`
+  - `POST /auth/refresh`
+  - `POST /auth/logout`
 - **Internal Logic:** Handles bcrypt password hashing. Generates short-lived Access Tokens and long-lived Refresh Tokens. Refresh tokens are tracked and revoked via Redis sets to securely handle session termination (logout) and prevent token replay.
 
 ### 📋 2. Task Service
 **Responsibility:** Task creation, board management, state transitions, and activity logging.
 - **Main Endpoints:**
-  - `POST /api/tasks`
-  - `GET /api/tasks` (with filtering, pagination & Redis caching)
-  - `PATCH /api/tasks/:id`
-  - `DELETE /api/tasks/:id`
+  - `POST /tasks`
+  - `GET /tasks` (with filtering, pagination & Redis caching)
+  - `PATCH /tasks/:id`
+  - `DELETE /tasks/:id`
 - **Internal Logic:** Creates task documents in MongoDB referencing PostgreSQL IDs. Implements caching around `GET` requests with a 60-second TTL to reduce DB hits. Upon task mutations (Create/Update), pushes a background job to the Redis/BullMQ queue.
 
 ### 🔔 3. Notification Service
@@ -263,9 +263,9 @@ MERN Stack/
 │   │   │   ├── prisma/               # PostgreSQL schema & migrations
 │   │   │   └── src/                  # Controllers, Middleware, Routes
 │   │   │
-│   │   ├── task-service/             # Port 3003 | MongoDB mapping, Task Queue Publisher
+│   │   ├── task-service/             # Port 5000 | MongoDB mapping, Task Queue Publisher
 │   │   │
-│   │   └── notification-service/     # Port 3004 | BullMQ worker & WebSockets
+│   │   └── notification-service/     # Port 6000 | BullMQ worker & WebSockets
 │   │
 │   └── shared/                       # Common types, enum schemas
 ```
@@ -324,7 +324,7 @@ REDIS_PORT=6379
 
 **`services/task-service/.env`**
 ```env
-PORT=3003
+PORT=5000
 MONGO_URI="mongodb://localhost:27017/taskflow"
 JWT_SECRET="<YOUR_JWT_SECRET>"
 REDIS_HOST=127.0.0.1
@@ -399,10 +399,6 @@ As development continues, prioritizing the following components will harden the 
 ## 👤 Author
 
 **Bhumika Deshmukh**
-
-Built as a portfolio project demonstrating production-grade backend engineering with microservices architecture, distributed messaging, and real-time systems.
-
----
 
 <p align="center">
   <strong>⭐ If this project demonstrates solid backend engineering, consider giving it a star!</strong>
