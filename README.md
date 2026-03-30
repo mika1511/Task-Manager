@@ -8,13 +8,14 @@
   <img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white" />
   <img src="https://img.shields.io/badge/Socket.io-010101?style=for-the-badge&logo=socketdotio&logoColor=white" />
   <img src="https://img.shields.io/badge/Prisma-2D3748?style=for-the-badge&logo=prisma&logoColor=white" />
+  <img src="https://img.shields.io/badge/AI--Powered-Llama%203-blueviolet?style=for-the-badge&logo=ai" />
 </p>
 
 <h1 align="center">🚀 TaskFlow API</h1>
-<h3 align="center">Enterprise-Grade Task Management Platform — Microservices Architecture</h3>
+<h3 align="center">AI-Ready Enterprise Task Management — Microservices Architecture</h3>
 
 <p align="center">
-  A production-ready, distributed backend system for task management built with <strong>Node.js</strong>, <strong>Express</strong>, and <strong>TypeScript</strong>. Features JWT authentication with refresh token rotation, real-time WebSocket notifications, asynchronous job processing, and a polyglot persistence strategy using PostgreSQL and MongoDB.
+  A production-ready, distributed backend system for task management featuring <strong>AI-native automation</strong>, real-time WebSocket synchronization, and asynchronous job processing. Built with <strong>Node.js</strong>, <strong>TypeScript</strong>, and a polyglot persistence strategy using <strong>PostgreSQL</strong>, <strong>MongoDB</strong>, and <strong>Redis</strong>.
 </p>
 
 ---
@@ -22,34 +23,65 @@
 ## 📋 Table of Contents
 
 - [Project Overview](#1-project-overview)
-- [System Architecture](#2-system-architecture)
-- [Architecture Diagram](#3-architecture-diagram)
-- [Service Breakdown](#4-service-breakdown)
-- [Authentication Flow](#5-authentication-flow)
-- [Task Creation Flow](#6-task-creation-flow)
-- [Database Design](#7-database-design)
-- [Folder Structure](#8-folder-structure)
-- [Tech Stack](#9-tech-stack)
-- [Setup Instructions](#10-setup-instructions)
-- [API Documentation](#11-api-documentation)
-- [Production Considerations](#12-production-considerations)
-- [Future Improvements](#13-future-improvements)
+- [✨ AI Integration](#2-ai-integration-llama-3)
+- [System Architecture](#3-system-architecture)
+- [Architecture Diagram](#4-architecture-diagram)
+- [Service Breakdown](#5-service-breakdown)
+- [Authentication Flow](#6-authentication-flow)
+- [Smart Task Creation Flow](#7-smart-task-creation-flow)
+- [Database Design](#8-database-design)
+- [Folder Structure](#9-folder-structure)
+- [Tech Stack](#10-tech-stack)
+- [Setup Instructions](#11-setup-instructions)
+- [API Documentation](#12-api-documentation)
+- [Production Considerations](#13-production-considerations)
+- [Future Improvements](#14-future-improvements)
 
 ---
 
 ## 1. Project Overview
 
-**TaskFlow API** is a robust, multi-tenant backend architecture designed to solve the challenges of collaborative task management across distributed teams. Modeled after enterprise software like Jira, it provides a scalable, resilient foundation for building project management clients.
+**TaskFlow API** is an **AI-Native** task orchestration platform designed for modern, high-velocity teams. By integrating Large Language Models (LLMs) into the core workflow, it transforms how tasks are captured, assigned, and managed—moving from manual entry to intelligent automated parsing.
 
-**Key Problems Solved:**
-- **AI-Powered Task Management:** Integration with Groq LLM (Llama 3) to parse natural language prompts and automatically extract titles, descriptions, and assignees.
-- **Smart Assignee Resolution:** Automatically resolves assignee IDs and names from names mentioned in AI prompts (e.g., "Assign to Alice") by performing fuzzy lookups on historical task data.
-- **Real-Time Collaboration:** Socket.io guarantees users receive instant updates without polling. When a task is assigned, the recipient's dashboard refreshes automatically with a visual notification.
-- **Immediate Identity Persistence:** Stores `createdByName` and `assignedToName` directly in MongoDB to ensure high-performance UI rendering and proper attribution even if the original user record is modified.
+**AI-Ready Key Features:**
+- **NLP-to-Task Engine:** Utilizing **Groq (Llama 3)** to convert natural language prompts (e.g., *"Assign a task to Alice to check server logs by 5pm"*) into structured, database-ready JSON objects.
+- **Context-Aware Assignee Mapping:** Impelements intelligent fuzzy search logic to resolve user nicknames or first names mentioned in AI prompts to their correct system UUIDs.
+- **Asynchronous AI Processing:** Offloads heavy AI inference and notification workflows to background workers (BullMQ) to ensure the API remains ultra-responsive.
+- **Real-Time Synergy:** Combines AI automation with WebSockets for instant, live-reloading dashboards across multiple user sessions.
 
 ---
 
-## 2. System Architecture
+## 2. ✨ AI Integration (Llama 3)
+
+TaskFlow is engineered to be **AI-first**. The "Smart Task" feature leverages the high-speed Groq inference cloud to provide a seamless user experience.
+
+### How it works:
+1. **User Prompt:** The client sends an unstructured string (e.g., *"Submit project proposal by Friday and assign it to Jungkook"*).
+2. **LLM Parsing:** The Task Service invokes the **Llama 3-8b** model via Groq, providing a custom schema-aware system prompt.
+3. **Structured Response:** The model returns a JSON object containing `title`, `description`, `dueDate`, and raw `assignee` name.
+4. **Fuzzy Lookup:** The system performs an internal lookup on existing users to map the AI-extracted name to a real `userId` and `displayName`.
+5. **Auto-Persistence:** The task is saved with full attribution, and the assignee receives a real-time socket notification.
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant TaskSvc as Task Service
+    participant AI as Groq (Llama 3)
+    participant DB as MongoDB / PSQL
+    participant Notif as Notif Service
+
+    User->>TaskSvc: "Assign a task to Alice..."
+    TaskSvc->>AI: Parse prompt [Schema Prompt]
+    AI-->>TaskSvc: {title: "...", assignee: "Alice"}
+    TaskSvc->>DB: Fuzzy Lookup "Alice" -> {id: 123, name: "Alice Smith"}
+    TaskSvc->>DB: Save Task
+    TaskSvc->>Notif: Publish 'task-created'
+    Notif-->>User: [Socket] Dashboard Refresh
+```
+
+---
+
+## 3. System Architecture
 
 TaskFlow utilizes a **microservices architecture** where each service is built independently with its own database access (where applicable) and domain logic. The services communicate predictably through specific channels:
 
