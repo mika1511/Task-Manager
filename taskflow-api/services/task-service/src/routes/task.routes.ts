@@ -78,4 +78,7 @@ router.delete(
   taskController.deleteTaskController
 );
 
+//using Ai to create task
+router.post("/smart", authMiddleware, taskController.createSmartTask);
+
 export default router;

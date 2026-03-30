@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { api, setAccessToken } from '@/lib/api';
 
+import { decodeTokenPayload } from '@/lib/utils';
+
 export interface User {
   id: string;
   name: string;
@@ -25,6 +27,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const fetchSession = async () => {
       const accessToken = localStorage.getItem('accessToken');
       const refreshToken = localStorage.getItem('refreshToken');
+
+      // Optimization: Try to set user immediately from local token
+      if (accessToken) {
+        const decoded = decodeTokenPayload(accessToken);
+        if (decoded) {
+          setUser({
+            id: decoded.userId,
+            name: decoded.name || decoded.email?.split("@")[0],
+            email: decoded.email
+          });
+          // Still fetch from server to ensure session is valid and data is fresh
+        }
+      }
 
       if (!accessToken && !refreshToken) {
         setIsLoading(false);
@@ -59,6 +74,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const login = async (token: string, userData?: User, refresh?: string) => {
     setAccessToken(token);
+    localStorage.setItem('accessToken', token);
     if (refresh) {
       localStorage.setItem('refreshToken', refresh);
     }
@@ -66,6 +82,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (userData) {
       setUser(userData);
       return;
+    }
+
+    // Try to decode if we didn't get direct userData
+    const decoded = decodeTokenPayload(token);
+    if (decoded) {
+        setUser({
+            id: decoded.userId,
+            name: decoded.name || decoded.email?.split("@")[0],
+            email: decoded.email
+        });
+        return;
     }
     
     try {
@@ -86,8 +113,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.error("Logout request failed:", e);
     } finally {
       setAccessToken('');
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
       setUser(null);
     }
   };

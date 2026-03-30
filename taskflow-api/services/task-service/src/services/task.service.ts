@@ -26,7 +26,7 @@ export const getTaskById = async (id: string) => {
 };
 
 export const updateTask = async (id: string, data: Partial<ITask>) => {
-  const allowedFields = ["title", "description", "status", "assignedTo"];
+  const allowedFields = ["title", "description", "status", "assignedTo", "assignedToName", "createdByName"];
   const updates: Partial<ITask> = {};
 
   allowedFields.forEach((field) => {

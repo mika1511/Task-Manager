@@ -8,10 +8,24 @@ const app = express();
 
 const server = http.createServer(app);
 
+const allowedOrigins = [
+  process.env.CLIENT_URL,
+  "http://localhost:8080",
+  "http://127.0.0.1:8080",
+  "http://localhost:5173",
+].filter(Boolean) as string[];
+
 export const io = new Server(server, {
   cors: {
-    origin: process.env.CORS_ORIGIN || "*",
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(null, false);
+      }
+    },
     methods: ["GET", "POST"],
+    credentials: true,
   },
 });
 
@@ -22,8 +36,18 @@ io.on("connection", (socket) => {
   console.log(`[Socket.io] Client connected: ${socket.id}`);
 
   socket.on("join", (userId: string) => {
+    if (!userId) {
+      console.warn(`[Socket.io] Client ${socket.id} tried to join without a userId`);
+      return;
+    }
     socket.join(userId);
-    console.log(`[Socket.io] User ${userId} joined their notification room`);
+    console.log(`[Socket.io] Client ${socket.id} (User: ${userId}) joined room: ${userId}`);
+    
+    // Debug: send a welcome back event
+    socket.emit("notification", {
+      type: "connected",
+      message: "Real-time updates active"
+    });
   });
 
   socket.on("disconnect", () => {

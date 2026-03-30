@@ -50,8 +50,8 @@ export const login = async (req: Request, res: Response) => {
       });
     }
 
-    const accessToken = generateAccessToken(user.id);
-    const refreshToken = generateRefreshToken(user.id);
+    const accessToken = generateAccessToken(user.id, user.email, user.name);
+    const refreshToken = generateRefreshToken(user.id, user.email, user.name);
 
     res.json({
       accessToken,
@@ -132,8 +132,8 @@ export const refreshToken = async (req: Request, res: Response) => {
     }
 
     // ✅ Generate new tokens
-    const newAccessToken = generateAccessToken(payload.userId);
-    const newRefreshToken = generateRefreshToken(payload.userId);
+    const newAccessToken = generateAccessToken(payload.userId, payload.email, payload.name);
+    const newRefreshToken = generateRefreshToken(payload.userId, payload.email, payload.name);
 
     // ✅ Blacklist old refresh token
     await redisClient.set(`bl_refresh_${refreshToken}`, "revoked", {

@@ -6,6 +6,8 @@ import { Server } from "socket.io";
 const redisConnection = {
   host: process.env.REDIS_HOST || "127.0.0.1",
   port: Number(process.env.REDIS_PORT) || 6379,
+  // Support full URL for production Redis
+  ...(process.env.REDIS_URL ? { url: process.env.REDIS_URL } : {})
 };
 
 export function startWorker(io: Server) {

@@ -21,18 +21,18 @@ const JWT_SECRET: string = process.env.JWT_SECRET;
 const ACCESS_TOKEN_EXPIRY: string = process.env.ACCESS_TOKEN_EXPIRY;
 const REFRESH_TOKEN_EXPIRY: string = process.env.REFRESH_TOKEN_EXPIRY;
 
-export const generateAccessToken = (userId: string): string => {
+export const generateAccessToken = (userId: string, email: string, name?: string | null): string => {
   return jwt.sign(
-    { userId },
+    { userId, email, name },
     JWT_SECRET,
     { expiresIn: ACCESS_TOKEN_EXPIRY as jwt.SignOptions["expiresIn"] }
   );
 };
 
-export const generateRefreshToken = (userId: string): string => {
+export const generateRefreshToken = (userId: string, email: string, name?: string | null): string => {
   return jwt.sign(
-    { userId },
+    { userId, email, name },
     JWT_SECRET,
     { expiresIn: REFRESH_TOKEN_EXPIRY as jwt.SignOptions["expiresIn"] }
   );
-};
+};

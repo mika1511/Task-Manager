@@ -10,6 +10,7 @@ import { CreateTaskModal } from "@/components/dashboard/CreateTaskModal";
 import { EmptyState } from "@/components/dashboard/EmptyState";
 import { api } from "@/lib/api";
 import { Loader2 } from "lucide-react";
+import { UpdateTaskModal } from "@/components/dashboard/UpdateTaskModal";
 
 const Index = () => {
   const { user } = useAuth();
@@ -17,11 +18,15 @@ const Index = () => {
   const [activeTab, setActiveTab] = useState<TabValue>("All");
   const [viewMode, setViewMode] = useState<"assignedTo" | "createdBy">("assignedTo");
   const [modalOpen, setModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [taskToEdit, setTaskToEdit] = useState<Task | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [counts, setCounts] = useState<Record<TabValue, number>>({
     "All": 0, "Pending": 0, "In Progress": 0, "Done": 0
   });
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [isAiLoading, setIsAiLoading] = useState(false);
 
   const fetchTasks = useCallback(async () => {
     setIsLoading(true);
@@ -55,7 +60,7 @@ const Index = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [activeTab, viewMode]);
+  }, [activeTab, viewMode, user?.id]);
 
   useEffect(() => {
     fetchTasks();
@@ -66,16 +71,18 @@ const Index = () => {
     const token = localStorage.getItem("accessToken");
     if (!token) return;
 
-    const socket = io({
+    const socket = io(import.meta.env.VITE_NOTIFICATION_URL || "http://localhost:6001", {
       path: "/socket.io",
       auth: { token }
     });
 
     socket.on("connect", () => {
       console.log("Connected to notification service");
+      socket.emit("join", user.id); // JOIN THE USER ROOM
     });
 
     socket.on("notification", (data: any) => {
+      console.log("New notification:", data);
       toast.custom(() => (
         <div className="flex items-center gap-3 bg-card border border-border p-4 rounded-lg shadow-lg">
           <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
@@ -94,6 +101,21 @@ const Index = () => {
     setViewMode("assignedTo");
     setActiveTab("All");
     setSidebarOpen(false);
+  };
+
+  const handleAiCreate = async () => {
+    if (!aiPrompt.trim()) return;
+    setIsAiLoading(true);
+    try {
+      const res = await api.post("/tasks/smart", { prompt: aiPrompt });
+      toast.success(`AI Created: ${res.data.title}`);
+      setAiPrompt(""); // Clear input field
+      fetchTasks();    // Refresh the task list
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || "AI failed to parse task");
+    } finally {
+      setIsAiLoading(false);
+    }
   };
 
   return (
@@ -124,6 +146,33 @@ const Index = () => {
                 Track, assign, and complete tasks with real-time team synchronization.
               </p>
             </div>
+            
+            {/* ✨ AI Smart Task Bar */}
+            <div className="flex gap-2 p-1.5 bg-secondary/30 rounded-xl mb-8 items-center border border-border shadow-sm group focus-within:ring-2 focus-within:ring-primary/20 transition-all">
+                <div className="pl-3 text-primary">
+                    {isAiLoading ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <div className="h-5 w-5 flex items-center justify-center text-lg">✨</div>
+                    )}
+                </div>
+                <input 
+                    className="flex-1 bg-transparent border-none outline-none p-2 text-sm placeholder:text-muted-foreground"
+                    placeholder="Type: Remind me to update inventory by Monday..."
+                    value={aiPrompt}
+                    onChange={(e) => setAiPrompt(e.target.value)}
+                    disabled={isAiLoading}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAiCreate()}
+                />
+                <button 
+                    onClick={handleAiCreate}
+                    disabled={isAiLoading || !aiPrompt.trim()}
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg text-xs font-semibold transition-all disabled:opacity-50 shadow-sm"
+                >
+                    {isAiLoading ? "Thinking..." : "AI Add"}
+                </button>
+            </div>
+
             <TaskTabs
               active={activeTab}
               onChange={setActiveTab}
@@ -143,6 +192,10 @@ const Index = () => {
                     task={task}
                     canChangeStatus={viewMode === "assignedTo"}
                     onTaskUpdated={fetchTasks}
+                    onEdit={(task) => {
+                      setTaskToEdit(task);
+                      setEditModalOpen(true);
+                    }}
                   />
                 ))}
               </div>
@@ -155,6 +208,20 @@ const Index = () => {
         onClose={() => setModalOpen(false)}
         onSuccess={fetchTasks}
       />
+      {taskToEdit && (
+        <UpdateTaskModal
+          open={editModalOpen}
+          onClose={() => {
+            setEditModalOpen(false);
+            setTaskToEdit(null);
+          }}
+          task={taskToEdit}
+          onSuccess={() => {
+            setTaskToEdit(null);
+            fetchTasks();
+          }}
+        />
+      )}
     </div>
   );
 };

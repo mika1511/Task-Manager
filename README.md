@@ -42,11 +42,10 @@
 **TaskFlow API** is a robust, multi-tenant backend architecture designed to solve the challenges of collaborative task management across distributed teams. Modeled after enterprise software like Jira, it provides a scalable, resilient foundation for building project management clients.
 
 **Key Problems Solved:**
-- **Decoupled Scaling:** By utilizing a microservices architecture, individual components (like Notifications or Auth) can scale independently based on demand.
-- **Secure Sessions:** Implementation of stateless JWT authentication combined with Redis-backed refresh token blacklisting ensures secure, instantly revocable user sessions.
-- **High-Performance Reads & Writes:** A polyglot persistence model handles relational integrity via PostgreSQL (Prisma) for users, while leveraging MongoDB for flexible, high-throughput task and activity logging.
-- **Non-blocking Operations:** Asynchronous task processing using BullMQ (Redis-backed) prevents heavy operations (like notifications) from blocking core API responses.
-- **Real-Time Collaboration:** Socket.io guarantees users receive instant updates without polling, reducing server load and improving UX.
+- **AI-Powered Task Management:** Integration with Groq LLM (Llama 3) to parse natural language prompts and automatically extract titles, descriptions, and assignees.
+- **Smart Assignee Resolution:** Automatically resolves assignee IDs and names from names mentioned in AI prompts (e.g., "Assign to Alice") by performing fuzzy lookups on historical task data.
+- **Real-Time Collaboration:** Socket.io guarantees users receive instant updates without polling. When a task is assigned, the recipient's dashboard refreshes automatically with a visual notification.
+- **Immediate Identity Persistence:** Stores `createdByName` and `assignedToName` directly in MongoDB to ensure high-performance UI rendering and proper attribution even if the original user record is modified.
 
 ---
 
@@ -55,7 +54,8 @@
 TaskFlow utilizes a **microservices architecture** where each service is built independently with its own database access (where applicable) and domain logic. The services communicate predictably through specific channels:
 
 - **Client ↔ API / Gateway:** RESTful HTTPS requests using JSON payloads, secured via JWT Bearer tokens.
-- **Inter-service (Async):** Event-driven communication via BullMQ and Redis. Services publish domain events (e.g., `TaskCreated`) to queues consumed by downstream services.
+- **AI Integration (Groq):** The Task Service interfaces with Groq's Llama 3 via high-performance inference to translate unstructured user prompts into structured JSON task data.
+- **Inter-service (Async):** Event-driven communication via BullMQ and Redis. Services publish domain events (e.g., `task-created`) to queues consumed by the Notification Service.
 - **Server ↔ Client (Real-time):** WebSocket connections (via Socket.io) for pushing asynchronous job results or collaborative updates directly to the connected clients.
 
 The polyglot persistence layer directs strict schema data (Users, Projects) to **PostgreSQL** to maintain ACID parity, and flexible/high-volume data (Tasks, Activity Logs) to **MongoDB**. **Redis** operates as a high-speed cache for queries and handles the token blacklist logic.
@@ -226,7 +226,10 @@ erDiagram
         string description
         string status
         uuid createdBy "Ref U_ID"
+        string createdByName
         uuid assignedTo "Ref U_ID"
+        string assignedToName
+        datetime createdAt
     }
 
     ACTIVITY_LOG {
@@ -283,6 +286,7 @@ MERN Stack/
 | **Message Queue** | `Bull Queue` | Guaranteed asynchronous job processing. |
 | **Containerization**| `Docker Compose`| Reproducible local environment scaffolding. |
 | **Real-time** | `Socket.io` | Bi-directional communication for pushing UI updates. |
+| **AI Inference** | `Groq (Llama 3)` | High-performance NLP to parse smart task prompts. |
 
 ---
 
@@ -325,6 +329,8 @@ MONGO_URI="mongodb://localhost:27017/taskflow"
 JWT_SECRET="<YOUR_JWT_SECRET>"
 REDIS_HOST=127.0.0.1
 REDIS_PORT=6379
+GROQ_API_KEY="<YOUR_GROQ_API_KEY>"
+GROQ_MODEL="llama3-8b-8192"
 ```
 
 ### 4) Install Dependencies and Run Migrations
@@ -357,8 +363,9 @@ npm run dev
 - `POST /api/auth/logout` - Revoke current refresh token in Redis.
 
 ### Task Service (Port 3003)
-- `POST /api/tasks` - Create a task in MongoDB and emit Bull Queue job.
-- `GET /api/tasks` - Fetch tasks, checks Redis Cache first (60s TTL).
+- `POST /api/tasks` - Create a manual task in MongoDB and emit Bull Queue job.
+- `POST /api/tasks/smart` - AI-powered task creation from natural language (e.g. "Ask Bob to check the logs by 10am").
+- `GET /api/tasks` - Fetch tasks, checks Redis Cache first (60s TTL). Supports `?filter=assignedTo` or `?filter=createdBy`.
 - `PATCH /api/tasks/:id` - Re-assign task or change status (Pending -> In Progress).
 - `DELETE /api/tasks/:id` - Delete a specific task.
 

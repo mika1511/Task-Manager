@@ -1,25 +1,40 @@
 import { Request, Response } from "express";
 import * as taskService from "../services/task.service";
+import * as aiService from "../services/ai.service";
+import { Task } from "../models/task.model";
 import { taskQueue } from "../queue/task.queue";
 
 export const createTaskController = async (req: Request, res: Response) => {
   try {
     const createdBy = req.user!.userId;
+    const createdByName = req.user!.name || req.user!.email?.split("@")[0] || "User";
+    
     // Use assignedTo from request body; fall back to creator if not provided
     const assignedTo = req.body.assignedTo ?? createdBy;
 
     const task = await taskService.createTask({
       ...req.body,
       createdBy: createdBy,
+      createdByName: createdByName,
       assignedTo: assignedTo,
     });
 
-    // Notify the assignee (not the creator) when a task is assigned
-    await taskQueue.add("task-created", {
-      userId: assignedTo,
-      taskId: task._id,
-      message: `Task "${task.title}" has been assigned to you`,
-    });
+    // Notify both creator and assignee
+    const jobs = [
+      taskQueue.add("task-created", {
+        userId: String(task.assignedTo),
+        taskId: task._id,
+        message: `New task "${task.title}" has been assigned to you`,
+      }),
+      taskQueue.add("task-created", {
+        userId: String(task.createdBy),
+        taskId: task._id,
+        message: `You created task "${task.title}" and assigned it to ${task.assignedTo}`,
+      }),
+    ];
+
+    console.log(`[TaskService] Adding ${jobs.length} notification jobs to queue for taskId: ${task._id}`);
+    await Promise.all(jobs);
 
     res.status(201).json(task);
   } catch (err) {
@@ -102,7 +117,7 @@ export const updateTaskController = async (req: Request, res: Response) => {
       return res.status(403).json({ error: "Forbidden: not your task" });
     }
 
-    const allowedForCreator = ["title", "description", "status", "assignedTo"];
+    const allowedForCreator = ["title", "description", "status", "assignedTo", "assignedToName"];
     const allowedForAssignee = ["status"];
     const allowedFields = isCreator ? allowedForCreator : allowedForAssignee;
 
@@ -124,11 +139,18 @@ export const updateTaskController = async (req: Request, res: Response) => {
 
     const updatedTask = await taskService.updateTask(id, updates);
 
-    await taskQueue.add("task-updated", {
-      userId: String(updatedTask.assignedTo),
-      taskId: updatedTask._id,
-      message: `Task "${updatedTask.title}" was updated`,
-    });
+    await Promise.all([
+      taskQueue.add("task-updated", {
+        userId: String(updatedTask.assignedTo),
+        taskId: updatedTask._id,
+        message: `Task "${updatedTask.title}" was updated by ${isCreator ? "creator" : "assignee"}`,
+      }),
+      taskQueue.add("task-updated", {
+        userId: String(updatedTask.createdBy),
+        taskId: updatedTask._id,
+        message: `Task "${updatedTask.title}" was updated by ${isCreator ? "you" : "assignee"}`,
+      }),
+    ]);
 
     res.json(updatedTask);
   } catch (err: any) {
@@ -152,6 +174,26 @@ export const deleteTaskController = async (req: Request, res: Response) => {
         .json({ error: "Forbidden: only the creator can delete this task" });
     }
 
+    const jobs = [
+      taskQueue.add("task-updated", {
+        userId: String(task.createdBy),
+        taskId: task._id,
+        message: `You deleted task "${task.title}"`,
+      }),
+    ];
+
+    if (task.assignedTo) {
+      jobs.push(
+        taskQueue.add("task-updated", {
+          userId: String(task.assignedTo),
+          taskId: task._id,
+          message: `Task "${task.title}" was deleted by its creator`,
+        })
+      );
+    }
+
+    await Promise.all(jobs);
+
     await taskService.deleteTask(req.params.id);
     res.status(204).send();
   } catch (err) {
@@ -161,10 +203,81 @@ export const deleteTaskController = async (req: Request, res: Response) => {
   }
 };
 
+
+// taskflow-api/services/task-service/src/controllers/task.controller.ts
+
+export const createSmartTask = async (req: Request, res: Response) => {
+  try {
+    const { prompt } = req.body;
+    const userId = req.user!.userId;
+    const userName = req.user!.name || req.user!.email?.split("@")[0] || "User";
+
+    console.log(`[SmartTask] Processing prompt from ${userName}: "${prompt}"`);
+
+    const aiParsedData = await aiService.parseTaskWithAI(prompt);
+    
+    // Ensure we have a title
+    if (!aiParsedData.title) {
+      aiParsedData.title = prompt.length > 50 ? prompt.substring(0, 47) + "..." : prompt;
+    }
+
+    // Smart Assignee Lookup: Try to find a matching ID from previous tasks if AI only gave a name
+    if (aiParsedData.assignedToName && !aiParsedData.assignedTo) {
+      const previousTask = await Task.findOne({ 
+        assignedToName: { $regex: new RegExp(`^${aiParsedData.assignedToName}$`, "i") },
+        assignedTo: { $exists: true, $ne: userId } // Don't match self if looking for someone else
+      }).sort({ createdAt: -1 });
+
+      if (previousTask) {
+        console.log(`[SmartTask] Lookup Success: Found ID ${previousTask.assignedTo} for "${aiParsedData.assignedToName}"`);
+        aiParsedData.assignedTo = previousTask.assignedTo;
+      }
+    }
+
+    // Default to creator if still no assignee
+    const assignedTo = aiParsedData.assignedTo || userId;
+
+    const task = await taskService.createTask({
+      ...aiParsedData,
+      createdBy: userId,
+      createdByName: userName,
+      assignedTo: assignedTo,
+    });
+
+    // Notify assignee if it's someone else
+    if (String(assignedTo) !== userId) {
+      console.log(`[SmartTask] Notifying assignee ${assignedTo} about task ${task._id}`);
+      await taskQueue.add("task-created", {
+        userId: String(assignedTo),
+        taskId: task._id,
+        message: `${userName} assigned a new task to you: "${task.title}"`,
+      });
+    }
+
+    // Notify creator
+    console.log(`[SmartTask] Notifying creator ${userId} about task ${task._id}`);
+    await taskQueue.add("task-created", {
+      userId: userId,
+      taskId: task._id,
+      message: `Successfully created smart task: "${task.title}"`,
+    });
+
+    res.status(201).json(task);
+  } catch (err: any) {
+    console.error("[SmartTask] Error:", err.message);
+    res.status(500).json({ 
+      error: "AI processing failed",
+      details: err.message
+    });
+  }
+};
+
+
 export default {
   createTaskController,
   getTasksController,
   getTaskByIdController,
   updateTaskController,
   deleteTaskController,
+  createSmartTask,
 };

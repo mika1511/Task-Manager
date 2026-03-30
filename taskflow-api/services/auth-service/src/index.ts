@@ -13,8 +13,13 @@ const startServer = async () => {
     console.log("✅ Redis connected successfully");
 
     const app = express();
-
-    app.use(cors());
+    
+    // ✅ Configure CORS properly for development and production
+    app.use(cors({
+      origin: [process.env.CLIENT_URL || "http://localhost:8080"],
+      credentials: true,
+      methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
+    }));
     app.use(express.json());
 
     app.use("/auth", authRoutes);

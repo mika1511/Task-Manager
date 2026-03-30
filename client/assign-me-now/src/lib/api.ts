@@ -1,11 +1,24 @@
 import axios from 'axios';
 
+const AUTH_BASE_URL = import.meta.env.VITE_AUTH_API_URL || 'http://localhost:3001';
+const TASK_BASE_URL = import.meta.env.VITE_TASK_API_URL || 'http://localhost:5000';
+
 // Create a configured Axios instance
 export const api = axios.create({
   timeout: 10000, // 10 seconds timeout
   headers: {
     'Content-Type': 'application/json',
   },
+});
+
+// Interceptor to route requests to the correct microservice
+api.interceptors.request.use((config) => {
+  if (config.url?.startsWith('/auth')) {
+    config.baseURL = AUTH_BASE_URL;
+  } else if (config.url?.startsWith('/tasks')) {
+    config.baseURL = TASK_BASE_URL;
+  }
+  return config;
 });
 
 // Initialize token from localStorage
@@ -17,6 +30,7 @@ export const setAccessToken = (token: string) => {
     localStorage.setItem('accessToken', token);
   } else {
     localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
   }
 };
 
